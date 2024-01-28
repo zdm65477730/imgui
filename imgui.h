@@ -1,4 +1,4 @@
-// dear imgui, v1.90.1 WIP
+// dear imgui, v1.90.2 WIP
 // (headers)
 
 // Help:
@@ -23,8 +23,8 @@
 
 // Library Version
 // (Integer encoded as XYYZZ for use in #if preprocessor conditionals, e.g. '#if IMGUI_VERSION_NUM >= 12345')
-#define IMGUI_VERSION       "1.90.1 WIP"
-#define IMGUI_VERSION_NUM   19002
+#define IMGUI_VERSION       "1.90.2 WIP"
+#define IMGUI_VERSION_NUM   19016
 #define IMGUI_HAS_TABLE
 
 /*
@@ -89,6 +89,8 @@ Index of this file:
 #define IMGUI_CHECKVERSION()        ImGui::DebugCheckVersionAndDataLayout(IMGUI_VERSION, sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2), sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx))
 
 // Helper Macros - IM_FMTARGS, IM_FMTLIST: Apply printf-style warnings to our formatting functions.
+// (MSVC provides an equivalent mechanism via SAL Annotations but it would require the macros in a different
+//  location. e.g. #include <sal.h> + void myprintf(_Printf_format_string_ const char* format, ...))
 #if !defined(IMGUI_USE_STB_SPRINTF) && defined(__MINGW32__) && !defined(__clang__)
 #define IM_FMTARGS(FMT)             __attribute__((format(gnu_printf, FMT, FMT+1)))
 #define IM_FMTLIST(FMT)             __attribute__((format(gnu_printf, FMT, 0)))
@@ -256,6 +258,7 @@ typedef void    (*ImGuiMemFreeFunc)(void* ptr, void* user_data);                
 
 // ImVec2: 2D vector used to store positions, sizes etc. [Compile-time configurable type]
 // This is a frequently used type in the API. Consider using IM_VEC2_CLASS_EXTRA to create implicit cast from/to our preferred type.
+// Add '#define IMGUI_DEFINE_MATH_OPERATORS' in your imconfig.h file to benefit from courtesy maths operators for those types.
 IM_MSVC_RUNTIME_CHECKS_OFF
 struct ImVec2
 {
@@ -2089,16 +2092,22 @@ struct ImGuiIO
     // Debug options
     //------------------------------------------------------------------
 
+    // Option to enable various debug tools showing buttons that will call the IM_DEBUG_BREAK() macro.
+    // - The Item Picker tool will be available regardless of this being enabled, in order to maximize its discoverability.
+    // - Requires a debugger being attached, otherwise IM_DEBUG_BREAK() options will appear to crash your application.
+    //   e.g. io.ConfigDebugIsDebuggerPresent = ::IsDebuggerPresent() on Win32, or refer to ImOsIsDebuggerPresent() imgui_test_engine/imgui_te_utils.cpp for a Unix compatible version).
+    bool        ConfigDebugIsDebuggerPresent;   // = false          // Enable various tools calling IM_DEBUG_BREAK().
+
     // Tools to test correct Begin/End and BeginChild/EndChild behaviors.
-    // Presently Begin()/End() and BeginChild()/EndChild() needs to ALWAYS be called in tandem, regardless of return value of BeginXXX()
-    // This is inconsistent with other BeginXXX functions and create confusion for many users.
-    // We expect to update the API eventually. In the meanwhile we provide tools to facilitate checking user-code behavior.
+    // - Presently Begin()/End() and BeginChild()/EndChild() needs to ALWAYS be called in tandem, regardless of return value of BeginXXX()
+    // - This is inconsistent with other BeginXXX functions and create confusion for many users.
+    // - We expect to update the API eventually. In the meanwhile we provide tools to facilitate checking user-code behavior.
     bool        ConfigDebugBeginReturnValueOnce;// = false          // First-time calls to Begin()/BeginChild() will return false. NEEDS TO BE SET AT APPLICATION BOOT TIME if you don't want to miss windows.
     bool        ConfigDebugBeginReturnValueLoop;// = false          // Some calls to Begin()/BeginChild() will return false. Will cycle through window depths then repeat. Suggested use: add "io.ConfigDebugBeginReturnValue = io.KeyShift" in your main loop then occasionally press SHIFT. Windows should be flickering while running.
 
-    // Option to deactivate io.AddFocusEvent(false) handling. May facilitate interactions with a debugger when focus loss leads to clearing inputs data.
-    // Backends may have other side-effects on focus loss, so this will reduce side-effects but not necessary remove all of them.
-    // Consider using e.g. Win32's IsDebuggerPresent() as an additional filter (or see ImOsIsDebuggerPresent() in imgui_test_engine/imgui_te_utils.cpp for a Unix compatible version).
+    // Option to deactivate io.AddFocusEvent(false) handling.
+    // - May facilitate interactions with a debugger when focus loss leads to clearing inputs data.
+    // - Backends may have other side-effects on focus loss, so this will reduce side-effects but not necessary remove all of them.
     bool        ConfigDebugIgnoreFocusLoss;     // = false          // Ignore io.AddFocusEvent(false), consequently not calling io.ClearInputKeys() in input processing.
 
     // Options to audit .ini data
@@ -2180,11 +2189,7 @@ struct ImGuiIO
     int         KeyMap[ImGuiKey_COUNT];             // [LEGACY] Input: map of indices into the KeysDown[512] entries array which represent your "native" keyboard state. The first 512 are now unused and should be kept zero. Legacy backend will write into KeyMap[] using ImGuiKey_ indices which are always >512.
     bool        KeysDown[ImGuiKey_COUNT];           // [LEGACY] Input: Keyboard keys that are pressed (ideally left in the "native" order your engine has access to keyboard keys, so you can use your own defines/enums for keys). This used to be [512] sized. It is now ImGuiKey_COUNT to allow legacy io.KeysDown[GetKeyIndex(...)] to work without an overflow.
     float       NavInputs[ImGuiNavInput_COUNT];     // [LEGACY] Since 1.88, NavInputs[] was removed. Backends from 1.60 to 1.86 won't build. Feed gamepad inputs via io.AddKeyEvent() and ImGuiKey_GamepadXXX enums.
-#endif
-#ifndef IMGUI_DISABLE_OBSOLETE_FUNCTIONS
-    void*       ImeWindowHandle;                    // = NULL   // [Obsoleted in 1.87] Set ImGuiViewport::PlatformHandleRaw instead. Set this to your HWND to get automatic IME cursor positioning.
-#else
-    void*       _UnusedPadding;
+    //void*     ImeWindowHandle;                    // [Obsoleted in 1.87] Set ImGuiViewport::PlatformHandleRaw instead. Set this to your HWND to get automatic IME cursor positioning.
 #endif
 
     //------------------------------------------------------------------
