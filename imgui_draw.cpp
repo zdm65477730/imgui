@@ -1,4 +1,4 @@
-// dear imgui, v1.90.5 WIP
+// dear imgui, v1.90.5
 // (drawing and font code)
 
 /*
@@ -67,6 +67,7 @@ Index of this file:
 #pragma clang diagnostic ignored "-Wdouble-promotion"               // warning: implicit conversion from 'float' to 'double' when passing argument to function  // using printf() is a misery with this as C++ va_arg ellipsis changes float to double.
 #pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"  // warning: implicit conversion from 'xxx' to 'float' may lose precision
 #pragma clang diagnostic ignored "-Wreserved-identifier"            // warning: identifier '_Xxx' is reserved because it starts with '_' followed by a capital letter
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"            // warning: 'xxx' is an unsafe pointer used for buffer access
 #elif defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wpragmas"                  // warning: unknown option after '#pragma GCC diagnostic' kind
 #pragma GCC diagnostic ignored "-Wunused-function"          // warning: 'xxxx' defined but not used
@@ -1220,10 +1221,10 @@ void ImDrawList::PathArcTo(const ImVec2& center, float radius, float a_min, floa
     }
 }
 
-void ImDrawList::PathEllipticalArcTo(const ImVec2& center, float radius_x, float radius_y, float rot, float a_min, float a_max, int num_segments)
+void ImDrawList::PathEllipticalArcTo(const ImVec2& center, const ImVec2& radius, float rot, float a_min, float a_max, int num_segments)
 {
     if (num_segments <= 0)
-        num_segments = _CalcCircleAutoSegmentCount(ImMax(radius_x, radius_y)); // A bit pessimistic, maybe there's a better computation to do here.
+        num_segments = _CalcCircleAutoSegmentCount(ImMax(radius.x, radius.y)); // A bit pessimistic, maybe there's a better computation to do here.
 
     _Path.reserve(_Path.Size + (num_segments + 1));
 
@@ -1232,11 +1233,10 @@ void ImDrawList::PathEllipticalArcTo(const ImVec2& center, float radius_x, float
     for (int i = 0; i <= num_segments; i++)
     {
         const float a = a_min + ((float)i / (float)num_segments) * (a_max - a_min);
-        ImVec2 point(ImCos(a) * radius_x, ImSin(a) * radius_y);
-        const float rel_x = (point.x * cos_rot) - (point.y * sin_rot);
-        const float rel_y = (point.x * sin_rot) + (point.y * cos_rot);
-        point.x = rel_x + center.x;
-        point.y = rel_y + center.y;
+        ImVec2 point(ImCos(a) * radius.x, ImSin(a) * radius.y);
+        const ImVec2 rel((point.x * cos_rot) - (point.y * sin_rot), (point.x * sin_rot) + (point.y * cos_rot));
+        point.x = rel.x + center.x;
+        point.y = rel.y + center.y;
         _Path.push_back(point);
     }
 }
@@ -1561,31 +1561,31 @@ void ImDrawList::AddNgonFilled(const ImVec2& center, float radius, ImU32 col, in
 }
 
 // Ellipse
-void ImDrawList::AddEllipse(const ImVec2& center, float radius_x, float radius_y, ImU32 col, float rot, int num_segments, float thickness)
+void ImDrawList::AddEllipse(const ImVec2& center, const ImVec2& radius, ImU32 col, float rot, int num_segments, float thickness)
 {
     if ((col & IM_COL32_A_MASK) == 0)
         return;
 
     if (num_segments <= 0)
-        num_segments = _CalcCircleAutoSegmentCount(ImMax(radius_x, radius_y)); // A bit pessimistic, maybe there's a better computation to do here.
+        num_segments = _CalcCircleAutoSegmentCount(ImMax(radius.x, radius.y)); // A bit pessimistic, maybe there's a better computation to do here.
 
     // Because we are filling a closed shape we remove 1 from the count of segments/points
     const float a_max = IM_PI * 2.0f * ((float)num_segments - 1.0f) / (float)num_segments;
-    PathEllipticalArcTo(center, radius_x, radius_y, rot, 0.0f, a_max, num_segments - 1);
+    PathEllipticalArcTo(center, radius, rot, 0.0f, a_max, num_segments - 1);
     PathStroke(col, true, thickness);
 }
 
-void ImDrawList::AddEllipseFilled(const ImVec2& center, float radius_x, float radius_y, ImU32 col, float rot, int num_segments)
+void ImDrawList::AddEllipseFilled(const ImVec2& center, const ImVec2& radius, ImU32 col, float rot, int num_segments)
 {
     if ((col & IM_COL32_A_MASK) == 0)
         return;
 
     if (num_segments <= 0)
-        num_segments = _CalcCircleAutoSegmentCount(ImMax(radius_x, radius_y)); // A bit pessimistic, maybe there's a better computation to do here.
+        num_segments = _CalcCircleAutoSegmentCount(ImMax(radius.x, radius.y)); // A bit pessimistic, maybe there's a better computation to do here.
 
     // Because we are filling a closed shape we remove 1 from the count of segments/points
     const float a_max = IM_PI * 2.0f * ((float)num_segments - 1.0f) / (float)num_segments;
-    PathEllipticalArcTo(center, radius_x, radius_y, rot, 0.0f, a_max, num_segments - 1);
+    PathEllipticalArcTo(center, radius, rot, 0.0f, a_max, num_segments - 1);
     PathFillConvex(col);
 }
 
@@ -1616,10 +1616,11 @@ void ImDrawList::AddText(const ImFont* font, float font_size, const ImVec2& pos,
     if ((col & IM_COL32_A_MASK) == 0)
         return;
 
+    // Accept null ranges
+    if (text_begin == text_end || text_begin[0] == 0)
+        return;
     if (text_end == NULL)
         text_end = text_begin + strlen(text_begin);
-    if (text_begin == text_end)
-        return;
 
     // Pull default font/size from the shared ImDrawListSharedData instance
     if (font == NULL)
